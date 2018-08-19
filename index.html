@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<body>
+<canvas id="c" width="640" height="480"></canvas>
+<script>
+    class Vec {
+        constructor(x = 0, y = 0) {
+            this.x = x
+            this.y = y
+        }
+
+        add(v) {
+            this.x += v.x
+            this.y += v.y
+            return this
+        }
+
+        mult(s) {
+            this.x *= s
+            this.y *= s
+            return this
+        }
+
+        length() {
+            const l = Math.sqrt(this.x * this.x + this.y * this.y)
+            // to prevent div by zero, return 1 if l is 0
+            return l !== 0 ? l : 1
+        }
+    }
+
+    function diff(v1, v2) {
+        return new Vec(v2.x - v1.x, v2.y - v1.y)
+    }
+
+    function add(v1, v2) {
+        return new Vec(v1.x + v2.x, v1.y + v2.y)
+    }
+
+    function neg(v) {
+        return new Vec(-v.x, -v.y)
+    }
+
+    class Mass {
+        constructor(mass = 1, pos = new Vec(), vel = new Vec(), force = new Vec()) {
+            this.mass = mass
+            this.pos = pos
+            this.vel = vel
+            this.force = force
+            this.locked = false
+        }
+
+        update(dt) {
+            if (!this.locked) {
+                this.vel.add(this.force.mult(dt / this.mass))
+                this.pos.add(this.vel.mult(dt))
+            }
+        }
+
+        /**
+         * @param force Vec
+         */
+        applyForce(force) {
+            this.force.add(force)
+        }
+    }
+
+    class Spring {
+        constructor(mass1, mass2) {
+            this.mass1 = mass1
+            this.mass2 = mass2
+            this.springLength = 1
+            this.springConstant = 4
+            this.frictionConstant = 0.01
+        }
+
+        solve() {
+            // spring force
+            const springVector = diff(this.mass1.pos, this.mass2.pos)
+            const length = springVector.length()
+            const springForce = springVector.mult((length - this.springLength) * this.springConstant / length)
+
+            // friction
+            const frictionForce = diff(this.mass1.vel, this.mass2.vel).mult(-this.frictionConstant)
+
+            // add spring force and friction force
+            const force = add(springForce, frictionForce)
+
+            // apply forces to masses
+            this.mass1.applyForce(force)
+            this.mass2.applyForce(neg(force))
+        }
+    }
+
+    const canvas = document.getElementById('c')
+    const ctx = canvas.getContext('2d')
+    const massCount = 10
+    const masses = new Array(massCount).fill(0).map(m => new Mass())
+    const springs = new Array(massCount-1).fill(0).map((s, i) => new Spring(masses[i], masses[i + 1]))
+    const gravity = new Vec(0, 9.81)
+    const dt = 0.3
+    const firstMass = masses[0]
+    const lastMass = masses[masses.length-1]
+    // lock first and last mass to our surface
+    firstMass.locked = true
+    lastMass.locked = true
+    // position in center of screen
+    lastMass.pos.x = canvas.width / 2
+    lastMass.pos.y = canvas.height / 2
+
+    function draw() {
+        requestAnimationFrame(draw)
+        ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+        // update spring forces to masses
+        springs.forEach(spring => spring.solve())
+
+        // update masses under force and draw
+        masses.forEach(mass => {
+            mass.applyForce(gravity)
+            mass.update(dt)
+            ctx.fillRect(mass.pos.x, mass.pos.y, 4, 4)
+        })
+
+        // draw rope
+        ctx.beginPath()
+        ctx.moveTo(masses[0].pos.x, masses[0].pos.y)
+        for (let i = 1; i < masses.length; i++) {
+            ctx.lineTo(masses[i].pos.x, masses[i].pos.y)
+        }
+        ctx.stroke()
+    }
+
+    draw()
+
+    window.addEventListener('mousemove', e => {
+        masses[0].pos.x = e.offsetX
+        masses[0].pos.y = e.offsetY
+    })
+
+</script>
+</body>
+</html>
